@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ben Daoud Réparation</title>
+  
+  <!-- PWA Settings -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Ben Daoud">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+
+  <!-- Supabase JS Client CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Lucide Icons (Vanilla) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Custom Styles (LTR Français) -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-wrapper">
+        <img src="icons/icon-192.png" alt="Ben Daoud Logo" class="brand-logo">
+        <div class="brand-title">
+          Ben Daoud
+          <span class="sub">RÉPARATION • بن داود</span>
+        </div>
+      </div>
+      <div class="header-status" id="supabaseStatusBadge" onclick="switchTab('settings')" title="Cliquez pour configurer Supabase">
+        <span class="status-dot offline" id="statusDot"></span>
+        <span id="statusText">Mode Local</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main View Area -->
+  <main class="main-content">
+
+    <!-- ========================================== -->
+    <!-- TAB 1: LISTE DES ARTICLES / REPARATIONS    -->
+    <!-- ========================================== -->
+    <section id="tab-articles" class="tab-view active">
+      
+      <!-- Quick Stats Cards -->
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px;">
+        <div class="card" style="padding: 12px; margin-bottom: 0; text-align: center;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Total</div>
+          <div id="statTotal" style="font-size: 1.3rem; font-weight: 800; color: var(--primary);">0</div>
+        </div>
+        <div class="card" style="padding: 12px; margin-bottom: 0; text-align: center; border-color: #bae6fd; background: #f0f9ff;">
+          <div style="font-size: 0.75rem; color: #0284c7; font-weight: 600;">En Atelier</div>
+          <div id="statAtelier" style="font-size: 1.3rem; font-weight: 800; color: #0284c7;">0</div>
+        </div>
+        <div class="card" style="padding: 12px; margin-bottom: 0; text-align: center; border-color: #a7f3d0; background: #ecfdf5;">
+          <div style="font-size: 0.75rem; color: #059669; font-weight: 600;">Prêt (Wajad)</div>
+          <div id="statPret" style="font-size: 1.3rem; font-weight: 800; color: #059669;">0</div>
+        </div>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="search-bar-wrapper">
+        <i data-lucide="search" class="search-icon" style="width: 18px; height: 18px;"></i>
+        <input type="text" id="searchInput" class="search-input" placeholder="Rechercher par client, téléphone, reçu..." oninput="filterArticles()">
+      </div>
+
+      <!-- Filter Pills -->
+      <div class="filter-pills">
+        <button class="pill active" data-filter="all" onclick="setFilter(this, 'all')">Tous</button>
+        <button class="pill" data-filter="today" onclick="setFilter(this, 'today')">Aujourd'hui</button>
+        <button class="pill" data-filter="recu" onclick="setFilter(this, 'recu')">🟡 Reçu</button>
+        <button class="pill" data-filter="en_atelier" onclick="setFilter(this, 'en_atelier')">🔵 En Atelier</button>
+        <button class="pill" data-filter="pret" onclick="setFilter(this, 'pret')">🟢 Prêt (Wajad)</button>
+        <button class="pill" data-filter="livre" onclick="setFilter(this, 'livre')">✅ Livré</button>
+      </div>
+
+      <!-- Filter by Atelier dropdown -->
+      <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 14px;">
+        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); white-space: nowrap;">Atelier :</span>
+        <select id="filterAtelierSelect" class="form-control" style="padding: 6px 12px; font-size: 0.85rem;" onchange="filterArticles()">
+          <option value="">Tous les Ateliers</option>
+          <!-- Dynamically populated -->
+        </select>
+      </div>
+
+      <!-- Articles Cards List -->
+      <div id="articlesList" class="articles-list">
+        <!-- Rendered by JavaScript -->
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="card" style="display: none; text-align: center; padding: 40px 20px;">
+        <i data-lucide="package-open" style="width: 48px; height: 48px; color: #94a3b8; margin-bottom: 12px;"></i>
+        <h4 style="font-size: 1.1rem; color: var(--primary); margin-bottom: 6px;">Aucun article trouvé</h4>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Ajoutez un nouveau dépôt pour commencer le suivi.</p>
+        <button class="btn btn-accent" onclick="switchTab('new')">
+          <i data-lucide="plus" style="width: 18px; height: 18px;"></i> Nouveau Dépôt
+        </button>
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: NOUVEAU DÉPÔT (CLIENT & ARTICLE)    -->
+    <!-- ========================================== -->
+    <section id="tab-new" class="tab-view">
+      <div class="card">
+        <div class="card-title">
+          <span>➕ Nouveau Dépôt d'Article</span>
+          <span style="font-size: 0.8rem; color: var(--accent); font-weight: 600;" id="formAutoTicket">BDR-Auto</span>
+        </div>
+
+        <form id="newArticleForm" onsubmit="handleSaveArticle(event)">
+          
+          <!-- Informations du Client -->
+          <div style="margin-bottom: 16px; border-bottom: 1px dashed var(--border); padding-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 0.9rem; color: var(--primary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="user" style="width: 16px; height: 16px; color: var(--accent);"></i> Informations du Client
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Nom <span class="required">*</span></label>
+                <input type="text" id="clientNom" class="form-control" placeholder="Ex: El Amrani" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Prénom <span class="required">*</span></label>
+                <input type="text" id="clientPrenom" class="form-control" placeholder="Ex: Mohammed" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Téléphone du Client (pour WhatsApp / SMS)</label>
+              <div style="display: flex; gap: 8px;">
+                <span style="display: flex; align-items: center; padding: 0 12px; background: #f1f5f9; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-weight: 600; font-size: 0.9rem; color: #475569;">
+                  🇲🇦 +212
+                </span>
+                <input type="tel" id="clientTelephone" class="form-control" placeholder="06XXXXXXXX ou 07XXXXXXXX">
+              </div>
+            </div>
+          </div>
+
+          <!-- Détails de l'Article & Photo -->
+          <div style="margin-bottom: 16px; border-bottom: 1px dashed var(--border); padding-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 0.9rem; color: var(--primary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="watch" style="width: 16px; height: 16px; color: var(--accent);"></i> Détails de l'Article
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Description de l'article & panne <span class="required">*</span></label>
+              <input type="text" id="descriptionArticle" class="form-control" placeholder="Ex: Bague Or 18k, Montre Tissot, Chaîne, Téléphone..." required>
+            </div>
+
+            <!-- Prise de photo directe avec la caméra du téléphone -->
+            <div class="form-group">
+              <label class="form-label">Photo de l'article (Caméra / Galerie)</label>
+              
+              <div class="photo-uploader-box" onclick="document.getElementById('photoInput').click()">
+                <i data-lucide="camera" style="width: 32px; height: 32px; color: var(--accent); margin-bottom: 6px;"></i>
+                <div style="font-weight: 700; font-size: 0.9rem; color: var(--primary);">Prendre une photo ou choisir</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Cliquez pour ouvrir l'appareil photo du téléphone</div>
+              </div>
+
+              <input type="file" id="photoInput" accept="image/*" capture="environment" style="display: none;" onchange="handlePhotoSelected(event)">
+
+              <div class="photo-preview-wrapper" id="photoPreviewContainer">
+                <img id="photoPreviewImg" class="photo-preview-img" src="" alt="Aperçu">
+                <button type="button" class="photo-remove-btn" onclick="removeSelectedPhoto()" title="Supprimer la photo">✕</button>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Date de Réception (Nhar Istilam)</label>
+                <input type="datetime-local" id="dateReception" class="form-control" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Prix Estimé (DH)</label>
+                <input type="number" id="prixEstime" class="form-control" placeholder="0" min="0" step="10" oninput="calculateBalance()">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Avance Versée (DH)</label>
+                <input type="number" id="avance" class="form-control" placeholder="0" min="0" step="10" oninput="calculateBalance()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Reste à Payer (DH)</label>
+                <input type="number" id="reste" class="form-control" placeholder="0" readonly style="background-color: #f8fafc; font-weight: 700; color: var(--danger);">
+              </div>
+            </div>
+          </div>
+
+          <!-- Atelier de Réparation -->
+          <div style="margin-bottom: 16px; border-bottom: 1px dashed var(--border); padding-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 0.9rem; color: var(--primary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="wrench" style="width: 16px; height: 16px; color: var(--accent);"></i> Atelier de Réparation
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Envoyer à l'Atelier :</label>
+                <select id="atelierSelect" class="form-control">
+                  <option value="">-- En attente d'envoi --</option>
+                  <!-- Populated dynamically: Brahim, Oro, Bouchaib, Youssef, Miyara, Aissam, Hamza... -->
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Date d'Envoi (Nhar Tsifat)</label>
+                <input type="date" id="dateEnvoiAtelier" class="form-control">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Notes & Remarques (Panne constatée, détails)</label>
+              <textarea id="notesArticle" class="form-control" rows="2" placeholder="Détails supplémentaires..."></textarea>
+            </div>
+          </div>
+
+          <!-- Option Reçu (Oui / Non) -->
+          <div class="form-group" style="margin-bottom: 20px;">
+            <label class="toggle-switch-container">
+              <div>
+                <div style="font-weight: 700; font-size: 0.92rem; color: var(--primary); display: flex; align-items: center; gap: 6px;">
+                  <i data-lucide="receipt" style="width: 18px; height: 18px; color: var(--accent);"></i>
+                  Donner un reçu au client ? (واش باغي Reçu ؟)
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+                  Génère un reçu officiel imprimable et partageable par WhatsApp
+                </div>
+              </div>
+              <input type="checkbox" id="recuDemandeSwitch" checked>
+            </label>
+          </div>
+
+          <!-- Bouton de Soumission -->
+          <button type="submit" class="btn btn-accent btn-block" style="padding: 14px; font-size: 1.05rem;">
+            <i data-lucide="check-circle" style="width: 20px; height: 20px;"></i>
+            Enregistrer le Dépôt
+          </button>
+
+        </form>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: ATELIERS (BRAHIM, ORO, BOUCHAIB...)  -->
+    <!-- ========================================== -->
+    <section id="tab-ateliers" class="tab-view">
+      <div class="card">
+        <div class="card-title">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="building-2" style="width: 20px; height: 20px; color: var(--accent);"></i>
+            <span>Gestion des Ateliers</span>
+          </div>
+          <button class="btn btn-sm btn-accent" onclick="openAddAtelierModal()">
+            <i data-lucide="plus" style="width: 16px; height: 16px;"></i> Ajouter un Atelier
+          </button>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+          Suivez les articles envoyés chez chaque artisan (Brahim, Oro, Bouchaib, Youssef, Miyara, Aissam, Hamza). Vous pouvez en ajouter de nouveaux ou modifier ceux existants.
+        </p>
+
+        <!-- Grid of Ateliers -->
+        <div id="ateliersContainer" class="ateliers-grid">
+          <!-- Rendered by JavaScript -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 4: PARAMÈTRES & CONNEXION SUPABASE     -->
+    <!-- ========================================== -->
+    <section id="tab-settings" class="tab-view">
+      <div class="card">
+        <div class="card-title">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="database" style="width: 20px; height: 20px; color: var(--accent);"></i>
+            <span>Connexion Supabase</span>
+          </div>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+          Connectez votre projet Supabase pour synchroniser automatiquement les articles, photos et ateliers entre votre téléphone de travail et la base de données.
+        </p>
+
+        <form id="supabaseConfigForm" onsubmit="handleSaveSupabaseConfig(event)">
+          <div class="form-group">
+            <label class="form-label">Project URL (Supabase URL)</label>
+            <input type="url" id="supabaseUrlInput" class="form-control" placeholder="https://xyzcompany.supabase.co" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Anon Public Key</label>
+            <input type="password" id="supabaseKeyInput" class="form-control" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." required>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 14px;">
+            <button type="submit" class="btn btn-primary" style="flex: 1;">
+              <i data-lucide="save" style="width: 18px; height: 18px;"></i> Sauvegarder
+            </button>
+            <button type="button" class="btn btn-outline" style="flex: 1;" onclick="testSupabaseConnection()">
+              <i data-lucide="activity" style="width: 18px; height: 18px;"></i> Tester
+            </button>
+          </div>
+        </form>
+
+        <div id="connectionFeedback" style="margin-top: 14px; font-size: 0.85rem; padding: 10px; border-radius: var(--radius-md); display: none;"></div>
+      </div>
+
+      <!-- Installation Guide on Phone -->
+      <div class="card">
+        <div class="card-title">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="smartphone" style="width: 20px; height: 20px; color: var(--accent);"></i>
+            <span>Installation sur Téléphone de Travail (PWA)</span>
+          </div>
+        </div>
+        
+        <div style="font-size: 0.85rem; color: #334155; line-height: 1.6;">
+          <div style="margin-bottom: 12px; padding: 10px; background: #f8fafc; border-radius: var(--radius-md); border-left: 4px solid #10b981;">
+            <strong style="color: #0f172a;">🤖 Sur Android (Google Chrome) :</strong>
+            <ol style="margin-left: 20px; margin-top: 6px;">
+              <li>Ouvrez le lien de l'application dans Chrome.</li>
+              <li>Cliquez sur les <strong>trois points verticaux (⋮)</strong> en haut à droite.</li>
+              <li>Sélectionnez <strong>« Installer l'application »</strong> ou <strong>« Ajouter à l'écran d'accueil »</strong>.</li>
+            </ol>
+          </div>
+
+          <div style="padding: 10px; background: #f8fafc; border-radius: var(--radius-md); border-left: 4px solid #0284c7;">
+            <strong style="color: #0f172a;">🍏 Sur iPhone (Safari) :</strong>
+            <ol style="margin-left: 20px; margin-top: 6px;">
+              <li>Ouvrez le lien de l'application dans Safari.</li>
+              <li>Appuyez sur le bouton de <strong>Partage</strong> (carré avec une flèche vers le haut).</li>
+              <li>Faites défiler et choisissez <strong>« Sur l'écran d'accueil »</strong>.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- Backup / Export Data -->
+      <div class="card">
+        <div class="card-title">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="hard-drive" style="width: 20px; height: 20px; color: var(--accent);"></i>
+            <span>Données & Sauvegarde Locale</span>
+          </div>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+          Téléchargez une copie de secours complète de tous vos articles et ateliers au format JSON.
+        </p>
+        <button class="btn btn-outline btn-block" onclick="exportDataBackup()">
+          <i data-lucide="download" style="width: 18px; height: 18px;"></i> Télécharger la Sauvegarde JSON
+        </button>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- MODAL: DÉTAIL ARTICLE & STATUT             -->
+  <!-- ========================================== -->
+  <div id="articleDetailModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modalArticleTitle">Détail de l'Article</h3>
+        <button class="modal-close-btn" onclick="closeArticleModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalArticleContent">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="modal-footer" id="modalArticleFooter">
+        <!-- Action Buttons -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: REÇU OFFICIEL CLIENT (TICKET)       -->
+  <!-- ========================================== -->
+  <div id="ticketModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>🧾 Reçu de Dépôt Client</h3>
+        <button class="modal-close-btn" onclick="closeTicketModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Printable Ticket Paper -->
+        <div id="printableTicket" class="ticket-paper">
+          <div class="ticket-header">
+            <h2>BEN DAOUD RÉPARATION</h2>
+            <p>Atelier de Réparation & Bijouterie • بن داود</p>
+            <div class="ticket-num" id="ticketRecuNum">BDR-2026-0001</div>
+            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;" id="ticketDateReception">29/10/2026 11:30</div>
+          </div>
+
+          <div class="ticket-body">
+            <div class="ticket-row">
+              <span class="label">Client :</span>
+              <span class="val" id="ticketClientNom">Mohammed El Amrani</span>
+            </div>
+            <div class="ticket-row">
+              <span class="label">Téléphone :</span>
+              <span class="val" id="ticketClientTel">0612345678</span>
+            </div>
+            <div class="ticket-row">
+              <span class="label">Article :</span>
+              <span class="val" id="ticketArticleDesc">Bague Or 18k</span>
+            </div>
+
+            <!-- Photo on Ticket -->
+            <div id="ticketPhotoBox" style="text-align: center; margin: 10px 0; display: none;">
+              <img id="ticketPhotoImg" src="" alt="Photo" style="max-height: 120px; border-radius: 8px; border: 1px solid #cbd5e1;">
+            </div>
+
+            <div class="ticket-row">
+              <span class="label">Prix Estimé :</span>
+              <span class="val" id="ticketPrixEstime">250 DH</span>
+            </div>
+            <div class="ticket-row">
+              <span class="label">Avance :</span>
+              <span class="val" id="ticketAvance">100 DH</span>
+            </div>
+            <div class="ticket-row" style="background: #fef2f2; padding: 4px 6px; border-radius: 4px;">
+              <span class="label" style="color: #991b1b; font-weight: 700;">Reste à Payer :</span>
+              <span class="val" id="ticketReste" style="color: #dc2626;">150 DH</span>
+            </div>
+          </div>
+
+          <div class="ticket-footer">
+            <p>Prière de conserver ce ticket pour le retrait de votre article.</p>
+            <p style="font-weight: 700; margin-top: 4px;">Merci pour votre confiance !</p>
+            <p style="direction: rtl; font-size: 0.75rem; margin-top: 2px;">المرجو الإدلاء بهذا التوصيل عند استلام القطعة</p>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="flex-direction: column; gap: 8px;">
+        <div style="display: flex; gap: 8px; width: 100%;">
+          <button class="btn btn-whatsapp" style="flex: 1;" onclick="shareTicketWhatsApp()">
+            <i data-lucide="message-circle" style="width: 18px; height: 18px;"></i> Envoyer via WhatsApp
+          </button>
+          <button class="btn btn-primary" style="flex: 1;" onclick="window.print()">
+            <i data-lucide="printer" style="width: 18px; height: 18px;"></i> Imprimer
+          </button>
+        </div>
+        <button class="btn btn-outline btn-block" onclick="closeTicketModal()">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: AJOUTER / MODIFIER ATELIER          -->
+  <!-- ========================================== -->
+  <div id="atelierModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="atelierModalTitle">Ajouter un Atelier</h3>
+        <button class="modal-close-btn" onclick="closeAtelierModal()">&times;</button>
+      </div>
+      <form id="atelierForm" onsubmit="handleSaveAtelier(event)">
+        <div class="modal-body">
+          <input type="hidden" id="atelierIdInput">
+          <div class="form-group">
+            <label class="form-label">Nom de l'Atelier / Artisan <span class="required">*</span></label>
+            <input type="text" id="atelierNomInput" class="form-control" placeholder="Ex: Brahim, Oro, Bouchaib, Youssef..." required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Numéro de Téléphone (Optionnel)</label>
+            <input type="tel" id="atelierTelephoneInput" class="form-control" placeholder="06XXXXXXXX">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Spécialité / Remarque</label>
+            <input type="text" id="atelierSpecialiteInput" class="form-control" placeholder="Ex: Or, Argent, Horlogerie, Polissage...">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeAtelierModal()">Annuler</button>
+          <button type="submit" class="btn btn-accent">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- BOTTOM NAVIGATION BAR (MOBILE APP FEEL)    -->
+  <!-- ========================================== -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-tab="articles" onclick="switchTab('articles')">
+      <i data-lucide="package"></i>
+      <span>Articles</span>
+    </button>
+    <button class="nav-item" data-tab="new" onclick="switchTab('new')">
+      <i data-lucide="plus-circle"></i>
+      <span>Nouveau</span>
+    </button>
+    <button class="nav-item" data-tab="ateliers" onclick="switchTab('ateliers')">
+      <i data-lucide="wrench"></i>
+      <span>Ateliers</span>
+    </button>
+    <button class="nav-item" data-tab="settings" onclick="switchTab('settings')">
+      <i data-lucide="settings"></i>
+      <span>Réglages</span>
+    </button>
+  </nav>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>

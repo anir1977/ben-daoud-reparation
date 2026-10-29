@@ -1,0 +1,19 @@
+{
+  "name": "ben-daoud-reparation",
+  "version": "1.0.0",
+  "description": "Application PWA Mobile pour la gestion des réparations et ateliers - Ben Daoud Réparation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "serve": "npx serve -l 3000"
+  },
+  "keywords": [
+    "reparation",
+    "pwa",
+    "supabase",
+    "atelier",
+    "whatsapp"
+  ],
+  "author": "Ben Daoud",
+  "license": "ISC"
+}
